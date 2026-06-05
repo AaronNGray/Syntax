@@ -81,6 +81,8 @@ export namespace AST {
 
 }
 
+namespace Syntax {
+
 type SymemeType = string;
 
 type PrinterReturn = { inline:string; outOfLine:string[] };
@@ -601,8 +603,38 @@ export class CommentSymbol extends TerminalSymbol {
         super();
     }
 
+    comment: string;
+
     parse(input: string): Result {
         return new Return({ value: "// comment" });
+    }
+    print(input: any): PrinterReturn { return { inline: this.comment, outOfLine: [] }; }
+
+    printParser(): string { return this.comment; }
+    printInlineParser(): string { return ""; }
+
+    printPrinter(): string { return ""; }
+    printInlinePrinter(): string { return ""; }
+
+    generateParser(): GeneratorReturn { return { inline: "", outOfLine: [] }; }
+    generateInlineParser(): string { return ""; }
+
+    generatePrinter(): string { return ""; }
+    generateInlinePrinter(): string { return ""; }
+}
+const CommentSymbolType = "CommentSymbol" as SymemeType;
+
+export class MultiLineCommentSymbol extends TerminalSymbol {
+    type: SymemeType = CommentSymbolType;
+
+    constructor() {
+        super();
+    }
+
+    comment: string[];
+
+    parse(input: string): Result {
+        return new Return({ value: "/* comment */" });
     }
     print(input: any): PrinterReturn { return { inline: "", outOfLine: [] }; }
 
@@ -822,3 +854,5 @@ class Grammar {
         };
     }
 }
+
+} // End namespace Syntax
