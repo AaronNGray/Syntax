@@ -1,0 +1,271 @@
+//
+//  syntax.ts
+//
+//  Copyright and Intellectual Property of Aaron Nathaniel Gray <aaronngray@gmail.com>
+//
+
+import typescript from "typescript"
+
+type Identifier = string | null;
+
+type SynemeType =
+    Sequence
+    | Selection
+    | Optional
+    | Repetition
+    | OptionalRepetition 
+    | Symbol
+    | Epsilon;
+
+type Symbol =
+    NonTerminalSymbol 
+    | TerminalSymbol;
+
+type TerminalSymbol = 
+    Identifier
+    | string
+    | number
+    | boolean
+    | NewLine
+    | Whitespace
+    | Comment
+    | NoWhitespace
+    | NullSymbol
+;
+const nullTerminalSymbol:TerminalSymbol = "null" as TerminalSymbol;
+
+const nullSymbol:NullSymbol = "null";
+type NullSymbol = string;
+
+class Return {
+    [key: string]: any;
+}
+type Result = Return | Array<Return> | true | false;
+
+type SememeType = string;
+class Syneme {
+    type: SememeType = EpsilonType;
+
+    parse(input: string): Result {
+        return false;
+    }
+    print(): string {
+        return "";
+    }
+}
+const NullSymeme = new Syneme();
+
+class Epsilon extends Syneme {
+    type: SememeType = EpsilonType;
+}
+const EpsilonType:SememeType = "Epsilon" as SememeType;
+
+class Sequence extends Syneme {
+    elements: Array<{identifier?:Identifier, syneme: Syneme}> = [];
+
+    parse(input: string): Result {
+        let index = 0
+        let ret:Return = new Return;
+        for (; index < this.elements.length; index++) {
+            const element = this.elements[index];
+            const result = element.syneme.parse(input);
+            if (result !== false)
+                ret[element.identifier as string] = result;
+            else
+                return false;
+        }
+        return ret;
+    }
+}
+const SequenceType:SememeType = "Sequence" as SememeType;
+
+class Selection extends Syneme {
+    elements: Array<Syneme> = [];
+
+    parse(input: string): Return | true | false {
+        let index = 0
+        let ret:Return = new Return;
+        for (; index < this.elements.length; index++) {
+            const element = this.elements[index];
+            const result = element.parse(input);
+            if (result !== false)
+                return result;
+        }
+        return false;
+    }
+}
+const SelectionType:SememeType = "Selection" as SememeType;
+
+class Optional extends Syneme {
+    element: Syneme = NullSymeme;
+
+    parse(input: string): Return | false | true {
+        return this.element.parse(input) || true;
+    };
+
+}
+const OptionType:SememeType = "Option" as SememeType;
+
+class Repetition extends Syneme {
+    element: Syneme = NullSymeme;
+
+    parse(input: string): Result {
+        let ret = [];
+        let result = this.element.parse(input);
+        if (result === false)
+            return false;
+
+        while (result = this.element.parse(input))
+            ret.push(result);
+
+        return ret;
+    }
+}
+const RepetitionType:SememeType = "Repetition" as SememeType;
+
+class OptionalRepetition extends Syneme {
+    element: Syneme = NullSymeme;
+
+    parse(input: string): Result {
+        let ret = [];
+        let result: Result;
+        while ((result = this.element.parse(input)) !== false)
+            ret.push(result);
+
+        return ret;
+    }
+}
+const OptionalRepetitionType:SememeType = "OptionalRepetition" as SememeType;
+
+class NonTerminalSymbol extends Syneme {
+    type: SememeType = NonTerminalSymbolType;
+    identifier: Identifier = null;
+    production: Production = nullProduction;
+
+    constructor(identifier: Identifier = null, production: Production = nullProduction) {
+        super();
+    }
+
+    parse(input: string): Result {
+        return (this.production !== nullProduction) ? this.production.syneme.parse(input) : false;
+    }
+}
+const NonTerminalSymbolType:SememeType = "NonTerminalSymbol" as SememeType;
+const nullNonTerminalSymbol:NonTerminalSymbol = new NonTerminalSymbol();
+
+class Parameter {
+    identifier: Identifier;
+    type: SynemeType;
+
+    constructor(identifier: Identifier, type: SynemeType) {
+        this.identifier = identifier;
+        this.type = type;
+    }
+}
+class Parameters {
+    parameters: Array<Parameter> = [];
+    parameterMap: Map<Identifier, Parameter> = new Map<Identifier, Parameter>();
+
+    addParameter(identifier: Identifier, type: SynemeType) {
+        this.parameters.push(new Parameter(identifier, type));
+        this.parameterMap.set(identifier, new Parameter(identifier, type));
+    }
+
+    getParameter(identifier: Identifier): Parameter | null {
+        return this.parameterMap.get(identifier) || null;
+    }
+}
+
+class Production {
+    identifier: Identifier;
+
+    parameters: Parameters = new Parameters();
+
+    syneme: Syneme;
+
+    constructor(identifier: Identifier, syneme: Syneme) {
+        this.identifier = identifier;
+        this.syneme = syneme;
+    }
+    addParameter(identifier: Identifier, type: SynemeType) {
+        this.parameters.addParameter(identifier, type);
+    }
+    getParameters(): Parameter[] {
+        return this.parameters.parameters;
+    }
+    generateParser(): string {
+        return "";
+    }
+    generateAST(base:Identifier): string {
+        return "class " + this.identifier + (base ? (" extends " + base + " ") : "") + "{\n"
+            + this.parameters.parameters.map(param => "param.identifier: "+ param.type + ";").join("\n") + "\n\n" +
+            + "constructor(" + this.parameters.parameters.map(param => param.identifier + ": " + param.type).join(", ") + ") {\n"
+            + this.parameters.parameters.map(param => "this." + param.identifier + " = " + param.identifier).join(";\n") +
+            + "\n}";
+        + "\n}"
+        + "const null" + this.identifier + ": Production = new " + this.identifier + "(\"null\");\n\n"
+    }
+}
+const nullProduction: Production = new Production("null", new Epsilon());
+
+class Grammar {
+    name?: string;
+    productions: Array<Production> = [];
+    productionMap: Map<Identifier, Production> = new Map<Identifier, Production>();
+
+    startSymbol: NonTerminalSymbol | null = null;
+
+    terminalSymbols: Set<TerminalSymbol> = new Set<TerminalSymbol>();
+    nonTerminalSymbols: Set<NonTerminalSymbol> = new Set<NonTerminalSymbol>();
+
+    terminalSymbolMap = new Map<Identifier, TerminalSymbol>();
+    nonTerminalSymbolMap = new Map<Identifier, NonTerminalSymbol>();  
+
+    constructor(startSymbol: NonTerminalSymbol | null = null) {
+        this.startSymbol = startSymbol;
+    }
+    setStartSymbol(startSymbol: NonTerminalSymbol | null = null) {
+        this.startSymbol = startSymbol;
+    }
+    getStartSymbol(): NonTerminalSymbol | null {
+        return this.startSymbol;
+    }
+    addProduction(production: Production) {
+        this.productions.push(production);
+    }
+    addTerminalSymbol(identifier: Identifier, symbol: TerminalSymbol) {
+        this.terminalSymbols.add(symbol);
+        this.terminalSymbolMap.set(identifier, symbol);
+    }
+    addNonTerminalSymbol(identifier: Identifier, symbol: NonTerminalSymbol) {
+        this.nonTerminalSymbols.add(symbol);
+        this.nonTerminalSymbolMap.set(identifier, symbol);
+    }
+    getProduction(identifier: Identifier): Production | null {
+        return this.productions.find(p => p.identifier === identifier) || null;
+    }
+    getTerminalSymbol(identifier: Identifier): TerminalSymbol | null {
+        return this.terminalSymbolMap.get(identifier) || null;
+    }
+    getNonTerminalSymbol(identifier: Identifier): NonTerminalSymbol | null {
+        return this.nonTerminalSymbolMap.get(identifier) || null;
+    }
+
+    parse(input: string): Result {
+        return this.startSymbol ? this.startSymbol.parse(input) : false;
+    }
+    print(): string {
+        return this.startSymbol ? this.startSymbol.print() : "";
+    }
+    generateParser(): string {
+        return this.productions.map(production => production.generateParser()).join("\n");
+    }
+    generateAST(): string {
+        return this.productions.map(production => production.generateAST(this.name)).join("\n");
+    }
+    generatePrinter(): string {
+        return "";
+    }
+   
+}
+
